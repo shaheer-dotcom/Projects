@@ -38,7 +38,7 @@ class DeribitTradingClient:
             self.token = data["result"]["access_token"]
             print("[+] Authenticated successfully using private/auth")
         else:
-            print("[-] Authentication failed:", data)
+            print("Authentication failed:", data)
             raise Exception("Authentication error")
 
     async def send_private_request(self, method, params):
@@ -82,9 +82,9 @@ class DeribitTradingClient:
         }
         if order_type.lower() == "limit":
             params['price'] = price
-        print(f"[>] Sending SELL order: {params}")
+        print(f"Sending SELL order: {params}")
         result = await self.send_private_request("private/sell", params)
-        print("[✓] SELL Response:", json.dumps(result, indent=2))
+        print("SELL Response:", json.dumps(result, indent=2))
         return result
 
     async def get_order_book(self, instrument_name):
@@ -104,7 +104,7 @@ class DeribitTradingClient:
         """Close websocket connection."""
         if self.websocket:
             await self.websocket.close()
-            print("[x] Connection closed.")
+            print("Connection closed.")
 
 async def print_menu():
     print("1: GET ORDER BOOK")
@@ -113,16 +113,13 @@ async def print_menu():
     print("Q: EXIT/QUIT")
 
 async def main():
-    print("=== Deribit Trading Client ===")
+    print("Deribit Trading Client")
     client_id = input("Enter your Deribit client ID: ")
     client_secret = input("Enter your Deribit client secret: ")
 
-    ##client_id = "piaDhL1a"
-    ##client_secret = "J9L0g16X96k_2w4Y6BFzFigq6xNZjcE30JCKyLqzl14"
     trader = DeribitTradingClient(client_id, client_secret)
     await trader.connect()
     await trader.authenticate()
-    # -------------
     while True:
         await print_menu()
         choice = input("Enter Your Choice: ")
@@ -133,7 +130,7 @@ async def main():
             print(f"\nFetching {symbol} order book...")
             print("Order Book Snapshot:", json.dumps(book, indent=2))
         elif (choice == "2"):
-            # print("\nPlacing a test BUY order...")
+            
             symbol = input("Enter The Symbol: ").upper()
             quantity = input("Enter The Amount: ")
             Otype = input("Enter Type Of Order: ")
@@ -165,3 +162,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
