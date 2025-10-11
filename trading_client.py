@@ -3,6 +3,17 @@ import json
 import websockets
 import time
 import os
+import mysql.connector
+from datetime import datetime, timezone
+
+
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",         
+    "password": "",        
+    "database": "deribit_trades"
+}
+
 
 class DeribitTradingClient:
     def __init__(self, client_id, client_secret):
@@ -11,11 +22,22 @@ class DeribitTradingClient:
         self.url = "wss://test.deribit.com/ws/api/v2"
         self.token = None
         self.websocket = None
+        self.db = self.connect_db()
+
+    def connect_db(self):
+        """Connect to MySQL database."""
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            print("Connected to MySQL database successfully.")
+            return conn
+        except mysql.connector.Error as err:
+            print(f"Database connection error: {err}")
+            return None
 
     async def connect(self):
         """Connect to Deribit WebSocket."""
         self.websocket = await websockets.connect(self.url)
-        print("[+] Connected to Deribit Testnet WebSocket")
+        print("Connected to Deribit Testnet WebSocket")
 
     async def authenticate(self):
         """Authenticate using client credentials."""
@@ -37,13 +59,13 @@ class DeribitTradingClient:
 
         if "result" in data and "access_token" in data["result"]:
             self.token = data["result"]["access_token"]
-            print("[+] Authenticated successfully.")
+            print("Authenticated successfully.")
         else:
-            print("[-] Authentication failed:", data)
+            print("Authentication failed:", data)
             raise Exception("Authentication error")
 
     async def send_private_request(self, method, params):
-        """Send authenticated (private) API request."""
+        """Send authenticated private API request."""
         if not self.token:
             raise Exception("Client not authenticated. Run authenticate() first.")
 
@@ -57,6 +79,35 @@ class DeribitTradingClient:
         await self.websocket.send(json.dumps(request))
         response = await self.websocket.recv()
         return json.loads(response)
+
+    def save_trade_to_db(self, trade_data):
+        """Store trade details in MySQL."""
+        if not self.db:
+            print("Skipping DB save — not connected to MySQL.")
+            return
+
+        try:
+            cursor = self.db.cursor()
+            sql = """
+            INSERT INTO trades (trade_id, side, instrument_name, amount, price, order_type, status, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            values = (
+                trade_data.get("order_id", "N/A"),
+                trade_data.get("direction", "N/A"),
+                trade_data.get("instrument_name", "N/A"),
+                trade_data.get("amount", 0),
+                trade_data.get("price", 0),
+                trade_data.get("order_type", "N/A"),
+                trade_data.get("order_state", "N/A"),
+               datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+            )
+            cursor.execute(sql, values)
+            self.db.commit()
+            print("Trade saved to database successfully.")
+        except mysql.connector.Error as err:
+            print(f"Database insert error: {err}")
 
     async def buy(self, instrument_name, amount, order_type, price=""):
         """Execute a BUY order."""
@@ -72,6 +123,10 @@ class DeribitTradingClient:
         print(f"Sending BUY order: {params}")
         result = await self.send_private_request("private/buy", params)
         print("BUY Response:", json.dumps(result, indent=2))
+
+        if "result" in result:
+            self.save_trade_to_db(result["result"])
+
         return result
 
     async def sell(self, instrument_name, amount, order_type, price=""):
@@ -88,6 +143,10 @@ class DeribitTradingClient:
         print(f"Sending SELL order: {params}")
         result = await self.send_private_request("private/sell", params)
         print("SELL Response:", json.dumps(result, indent=2))
+
+        if "result" in result:
+            self.save_trade_to_db(result["result"])
+
         return result
 
     async def get_open_limit_orders(self, currency):
@@ -120,14 +179,15 @@ class DeribitTradingClient:
         }
         await self.websocket.send(json.dumps(msg))
         response = await self.websocket.recv()
-        data = json.loads(response)
-        return data
+        return json.loads(response)
 
     async def close(self):
-        """Close websocket connection."""
+        """Close connections."""
         if self.websocket:
             await self.websocket.close()
-            print("[x] Connection closed.")
+        if self.db:
+            self.db.close()
+        print("Connections closed.")
 
 async def print_menu():
     print("\n1: GET ORDER BOOK")
@@ -142,7 +202,7 @@ async def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 async def main():
-    print("=== Deribit Trading Client ===")
+    print("Deribit Trading Client")
     client_id = input("Enter your Deribit client ID: ").strip()
     client_secret = input("Enter your Deribit client secret: ").strip()
 
@@ -155,40 +215,38 @@ async def main():
         choice = input("Enter Your Choice: ").strip()
 
         if choice == "1":
-            symbol = input("Enter The Symbol (e.g., BTC-PERPETUAL): ").upper()
+            symbol = input("Enter Symbol (e.g., BTC-PERPETUAL): ").upper()
             book = await trader.get_order_book(symbol)
-            print(f"\nOrder Book Snapshot for {symbol}:")
             print(json.dumps(book, indent=2))
             await clear_screen()
 
         elif choice == "2":
-            symbol = input("Enter The Symbol (e.g., BTC-PERPETUAL): ").upper()
-            quantity = input("Enter The Amount: ").strip()
-            order_type = input("Enter Type Of Order (market/limit): ").strip()
+            symbol = input("Symbol (e.g., BTC-PERPETUAL): ").upper()
+            quantity = input("Amount: ").strip()
+            order_type = input("Type (market/limit): ").strip()
             if order_type.lower() == "limit":
-                price = input("Enter The Limit Price: ").strip()
+                price = input("Limit Price: ").strip()
                 await trader.buy(symbol, quantity, order_type, price)
             else:
                 await trader.buy(symbol, quantity, order_type)
             await clear_screen()
 
         elif choice == "3":
-            symbol = input("Enter The Symbol (e.g., BTC-PERPETUAL): ").upper()
-            quantity = input("Enter The Amount: ").strip()
-            order_type = input("Enter Type Of Order (market/limit): ").strip()
+            symbol = input("Symbol (e.g., BTC-PERPETUAL): ").upper()
+            quantity = input("Amount: ").strip()
+            order_type = input("Type (market/limit): ").strip()
             if order_type.lower() == "limit":
-                price = input("Enter The Limit Price: ").strip()
+                price = input("Limit Price: ").strip()
                 await trader.sell(symbol, quantity, order_type, price)
             else:
                 await trader.sell(symbol, quantity, order_type)
             await clear_screen()
 
         elif choice == "4":
-            currency = input("Enter Currency (e.g., BTC): ").upper()
+            currency = input("Currency (e.g., BTC): ").upper()
             orders = await trader.get_open_limit_orders(currency)
-
             if not orders:
-                print("\n[!] No open limit orders found.")
+                print("[!] No open limit orders found.")
                 await clear_screen()
                 continue
 
@@ -206,7 +264,6 @@ async def main():
                     print("Invalid selection.")
             except ValueError:
                 print("Invalid input.")
-
             await clear_screen()
 
         elif choice.lower() == "q":
