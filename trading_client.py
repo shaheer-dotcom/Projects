@@ -1,3 +1,20 @@
+""""Deribit Trading Client (Python + MySQL)
+A fully asynchronous crypto trading client built with Python, WebSockets, and MySQL.
+It connects to the Deribit Testnet API for live authentication, market data retrieval, and trade execution (buy, sell, and cancel orders).
+The system also logs all executed trades in a MySQL database with timestamps, allowing users to review their trading history and performance later.
+
+Features:
+Connects securely to the Deribit Testnet API via WebSockets
+Authenticates using client credentials with trade permissions
+Places market and limit buy/sell orders
+Cancels specific open limit orders interactively
+Fetches live order book data
+Stores executed trades in MySQL for record-keeping and analytics
+Clean CLI interface with auto screen refresh
+Tech Stack: Python (asyncio, websockets, json), MySQL, Deribit API
+""""
+
+
 import asyncio
 import json
 import websockets
@@ -276,3 +293,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
