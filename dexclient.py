@@ -1,3 +1,15 @@
+### Purpose:
+# A cryptocurrency market monitoring tool that fetches real-time trading pair data from DexScreener API and identifies top-performing tokens based on 24-hour price changes.
+
+### Key Functionality:
+#- Searches for trading pairs using popular cryptocurrency keywords (ETH, USDT, SOL, BNB, BTC)
+#- Filters pairs by minimum liquidity requirements
+#- Identifies and displays top gainers by 24-hour percentage change
+#- Runs continuously with configurable refresh intervals
+
+
+
+
 import aiohttp
 import asyncio
 import time
@@ -61,3 +73,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
